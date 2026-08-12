@@ -27,19 +27,12 @@ module.exports = function getUserProfile () {
           let template = buf.toString()
           let username = user?.username
           if (username?.match(/#{(.*)}/) !== null && !utils.disableOnContainerEnv()) {
+            // Mark that a stored SSTI attempt was detected, but do NOT execute the payload.
+            // Evaluating user-controlled code (eval) enables stored code injection (CWE-94).
             req.app.locals.abused_ssti_bug = true
-            const code = username?.substring(2, username.length - 1)
-            try {
-              if (!code) {
-                throw new Error('Username is null')
-              }
-              username = eval(code) // eslint-disable-line no-eval
-            } catch (err) {
-              username = '\\' + username
-            }
-          } else {
-            username = '\\' + username
           }
+          // Always escape the username as a literal string to prevent Pug template injection.
+          username = '\\' + username
           const theme = themes[config.get<string>('application.theme')]
           if (username) {
             template = template.replace(/_username_/g, username)
