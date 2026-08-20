@@ -37,3 +37,35 @@ describe('codingChallengeFixes', () => {
     }
   })
 })
+
+describe('unionSqlInjectionChallenge fix option 3', () => {
+  const fixFilePath = './data/static/codefixes/unionSqlInjectionChallenge_3.ts'
+
+  it('fix file should exist', () => {
+    expect(fs.existsSync(fixFilePath)).to.equal(true)
+  })
+
+  it('should not contain string-interpolated user input in SQL query (no template literal injection)', () => {
+    const fixContent = fs.readFileSync(fixFilePath, 'utf8')
+    // Parameterized queries must not embed the criteria variable directly via template literal
+    expect(fixContent).to.not.match(/`[^`]*\$\{criteria\}[^`]*`/)
+  })
+
+  it('should use Sequelize parameterized replacements to prevent SQL injection', () => {
+    const fixContent = fs.readFileSync(fixFilePath, 'utf8')
+    // The fix must pass a replacements object to sequelize.query()
+    expect(fixContent).to.match(/replacements\s*:\s*\{/)
+  })
+
+  it('should use a named placeholder for criteria in the SQL query', () => {
+    const fixContent = fs.readFileSync(fixFilePath, 'utf8')
+    // The SQL query must reference criteria as a named bound parameter (:criteria)
+    expect(fixContent).to.match(/:criteria/)
+  })
+
+  it('should still call sequelize.query with a parameterized SQL string', () => {
+    const fixContent = fs.readFileSync(fixFilePath, 'utf8')
+    expect(fixContent).to.include('sequelize.query(')
+    expect(fixContent).to.include('SELECT * FROM Products WHERE')
+  })
+})
