@@ -185,10 +185,38 @@ describe('SearchResultComponent', () => {
     expect(component.dataSource.filter).toEqual('product search')
   })
 
-  it('should pass the search query as trusted HTML', () => {
+  it('should store search query as plain text string (not SafeHtml) to prevent XSS via innerHTML', () => {
     activatedRoute.setQueryParameter('<script>scripttag</script>')
     component.filterTable()
-    expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>scripttag</script>')
+    // searchValue must be a plain string so Angular's text interpolation ({{ }}) auto-escapes it.
+    // bypassSecurityTrustHtml must NOT be called for the search query parameter.
+    expect(component.searchValue).toBe('<script>scripttag</script>')
+    expect(typeof component.searchValue).toBe('string')
+  })
+
+  it('should not call bypassSecurityTrustHtml for the search query parameter', () => {
+    sanitizer.bypassSecurityTrustHtml.calls.reset()
+    activatedRoute.setQueryParameter('<img src=x onerror=alert(1)>')
+    component.filterTable()
+    // bypassSecurityTrustHtml must not be called with the untrusted query param
+    const calls = sanitizer.bypassSecurityTrustHtml.calls.allArgs()
+    const calledWithQueryParam = calls.some((args: any[]) => args[0] === '<img src=x onerror=alert(1)>')
+    expect(calledWithQueryParam).toBeFalse()
+  })
+
+  it('should store XSS payload as plain string without bypassing sanitization', () => {
+    const xssPayload = '<iframe src="javascript:alert(`xss`)">'
+    activatedRoute.setQueryParameter(xssPayload)
+    component.filterTable()
+    expect(component.searchValue).toBe(xssPayload)
+    // Confirm searchValue is a plain string — Angular {{ }} interpolation will HTML-escape it
+    expect(component.searchValue instanceof Object).toBeFalse()
+  })
+
+  it('should set searchValue to undefined when query param is absent', () => {
+    activatedRoute.setQueryParameter('')
+    component.filterTable()
+    expect(component.searchValue).toBeUndefined()
   })
 
   it('should open a modal dialog with product details', () => {
