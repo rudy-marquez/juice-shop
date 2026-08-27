@@ -11,68 +11,125 @@ chai.use(sinonChai)
 
 describe('b2bOrder', () => {
   const createB2bOrder = require('../../routes/b2bOrder')
-  const challenges = require('../../data/datacache').challenges
   let req: any
   let res: any
   let next: any
-  let save: any
 
   beforeEach(() => {
-    req = { body: { } }
+    req = { body: {} }
     res = { json: sinon.spy(), status: sinon.spy() }
     next = sinon.spy()
-    save = () => ({
-      then () { }
+  })
+
+  describe('safe JSON deserialization (CWE-502 remediation)', () => {
+    it('rejects code execution payloads — infinite loop — by calling next with error', () => {
+      req.body.orderLinesData = '(function dos() { while(true); })()'
+
+      createB2bOrder()(req, res, next)
+
+      // JSON.parse throws a SyntaxError for non-JSON input; next is called with the error
+      expect(next).to.have.been.calledOnce
+      expect(next.firstCall.args[0]).to.be.instanceOf(SyntaxError)
+      expect(res.json).to.not.have.been.called
     })
-  })
 
-  xit('infinite loop payload does not succeed but solves "rceChallenge"', () => { // FIXME Started failing on Linux regularly
-    challenges.rceChallenge = { solved: false, save }
+    it('rejects ReDoS regex spin-up payloads — calls next with error', () => {
+      req.body.orderLinesData = '/((a+)+)b/.test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")'
 
-    req.body.orderLinesData = '(function dos() { while(true); })()'
+      createB2bOrder()(req, res, next)
 
-    createB2bOrder()(req, res, next)
+      expect(next).to.have.been.calledOnce
+      expect(next.firstCall.args[0]).to.be.instanceOf(SyntaxError)
+      expect(res.json).to.not.have.been.called
+    })
 
-    expect(challenges.rceChallenge.solved).to.equal(true)
-  })
+    it('rejects process.exit() sandbox escape payload — calls next with error', () => {
+      req.body.orderLinesData = 'this.constructor.constructor("return process")().exit()'
 
-  // FIXME Disabled as test started failing on Linux regularly
-  xit('timeout after 2 seconds solves "rceOccupyChallenge"', () => {
-    challenges.rceOccupyChallenge = { solved: false, save }
+      createB2bOrder()(req, res, next)
 
-    req.body.orderLinesData = '/((a+)+)b/.test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")'
+      expect(next).to.have.been.calledOnce
+      expect(next.firstCall.args[0]).to.be.instanceOf(SyntaxError)
+      expect(res.json).to.not.have.been.called
+    })
 
-    createB2bOrder()(req, res, next)
+    it('rejects eval/exec injection payloads — calls next with error', () => {
+      req.body.orderLinesData = 'eval("require(\'child_process\').execSync(\'id\')")'
 
-    expect(challenges.rceOccupyChallenge.solved).to.equal(true)
-  }/*, 3000 */)
+      createB2bOrder()(req, res, next)
 
-  it('deserializing JSON as documented in Swagger should not solve "rceChallenge"', () => {
-    challenges.rceChallenge = { solved: false, save }
+      expect(next).to.have.been.calledOnce
+      expect(next.firstCall.args[0]).to.be.instanceOf(SyntaxError)
+      expect(res.json).to.not.have.been.called
+    })
 
-    req.body.orderLinesData = '{"productId": 12,"quantity": 10000,"customerReference": ["PO0000001.2", "SM20180105|042"],"couponCode": "pes[Bh.u*t"}'
+    it('accepts valid JSON order as documented in Swagger and returns order response', () => {
+      req.body.orderLinesData = '{"productId": 12,"quantity": 10000,"customerReference": ["PO0000001.2", "SM20180105|042"],"couponCode": "pes[Bh.u*t"}'
 
-    createB2bOrder()(req, res, next)
+      createB2bOrder()(req, res, next)
 
-    expect(challenges.rceChallenge.solved).to.equal(false)
-  })
+      expect(next).to.not.have.been.called
+      expect(res.json).to.have.been.calledOnce
+    })
 
-  it('deserializing arbitrary JSON should not solve "rceChallenge"', () => {
-    challenges.rceChallenge = { solved: false, save }
+    it('accepts arbitrary valid JSON and returns order response', () => {
+      req.body.orderLinesData = '{"hello": "world", "foo": 42, "bar": [false, true]}'
 
-    req.body.orderLinesData = '{"hello": "world", "foo": 42, "bar": [false, true]}'
+      createB2bOrder()(req, res, next)
 
-    createB2bOrder()(req, res, next)
-    expect(challenges.rceChallenge.solved).to.equal(false)
-  })
+      expect(next).to.not.have.been.called
+      expect(res.json).to.have.been.calledOnce
+    })
 
-  it('deserializing broken JSON should not solve "rceChallenge"', () => {
-    challenges.rceChallenge = { solved: false, save }
+    it('rejects malformed / broken JSON — calls next with SyntaxError', () => {
+      req.body.orderLinesData = '{ "productId: 28'
 
-    req.body.orderLinesData = '{ "productId: 28'
+      createB2bOrder()(req, res, next)
 
-    createB2bOrder()(req, res, next)
+      expect(next).to.have.been.calledOnce
+      expect(next.firstCall.args[0]).to.be.instanceOf(SyntaxError)
+      expect(res.json).to.not.have.been.called
+    })
 
-    expect(challenges.rceChallenge.solved).to.equal(false)
+    it('uses empty string as default when orderLinesData is absent — calls next with SyntaxError', () => {
+      // empty string is not valid JSON, so JSON.parse throws
+      req.body = {}
+
+      createB2bOrder()(req, res, next)
+
+      expect(next).to.have.been.calledOnce
+      expect(next.firstCall.args[0]).to.be.instanceOf(SyntaxError)
+    })
+
+    it('response includes cid echoed from request body', () => {
+      req.body.cid = 'test-customer-001'
+      req.body.orderLinesData = '{"productId": 5, "quantity": 1}'
+
+      createB2bOrder()(req, res, next)
+
+      expect(res.json).to.have.been.calledOnce
+      const response = res.json.firstCall.args[0]
+      expect(response).to.have.property('cid', 'test-customer-001')
+    })
+
+    it('response includes orderNo and paymentDue fields', () => {
+      req.body.orderLinesData = '{"productId": 5, "quantity": 1}'
+
+      createB2bOrder()(req, res, next)
+
+      expect(res.json).to.have.been.calledOnce
+      const response = res.json.firstCall.args[0]
+      expect(response).to.have.property('orderNo').that.is.a('string')
+      expect(response).to.have.property('paymentDue').that.is.a('string')
+    })
+
+    it('accepts a JSON array as orderLinesData', () => {
+      req.body.orderLinesData = '[{"productId": 1, "quantity": 2}, {"productId": 3, "quantity": 4}]'
+
+      createB2bOrder()(req, res, next)
+
+      expect(next).to.not.have.been.called
+      expect(res.json).to.have.been.calledOnce
+    })
   })
 })
