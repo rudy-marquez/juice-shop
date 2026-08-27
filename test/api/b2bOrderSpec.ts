@@ -14,7 +14,7 @@ const authHeader = { Authorization: 'Bearer ' + security.authorize(), 'content-t
 
 describe('/b2b/v2/orders', () => {
   if (!utils.disableOnContainerEnv()) {
-    it('POST endless loop exploit in "orderLinesData" will raise explicit error', () => {
+    it('POST code execution payload in "orderLinesData" is rejected as invalid JSON', () => {
       return frisby.post(API_URL, {
         headers: authHeader,
         body: {
@@ -22,20 +22,19 @@ describe('/b2b/v2/orders', () => {
         }
       })
         .expect('status', 500)
-        .expect('bodyContains', 'Infinite loop detected - reached max iterations')
     })
 
-    it('POST busy spinning regex attack does not raise an error', () => {
+    it('POST ReDoS regex payload in "orderLinesData" is rejected as invalid JSON', () => {
       return frisby.post(API_URL, {
         headers: authHeader,
         body: {
           orderLinesData: '/((a+)+)b/.test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")'
         }
       })
-        .expect('status', 503)
+        .expect('status', 500)
     })
 
-    it('POST sandbox breakout attack in "orderLinesData" will raise error', () => {
+    it('POST sandbox breakout attack in "orderLinesData" is rejected as invalid JSON', () => {
       return frisby.post(API_URL, {
         headers: authHeader,
         body: {
@@ -79,5 +78,32 @@ describe('/b2b/v2/orders', () => {
       .expect('json', {
         cid: 'test'
       })
+  })
+
+  it('POST valid JSON orderLinesData returns successful order', () => {
+    return frisby.post(API_URL, {
+      headers: authHeader,
+      body: {
+        cid: 'customer-123',
+        orderLinesData: '{"productId": 12,"quantity": 10000,"customerReference": ["PO0000001.2"]}'
+      }
+    })
+      .expect('status', 200)
+      .expect('header', 'content-type', /application\/json/)
+      .expect('jsonTypes', {
+        cid: Joi.string(),
+        orderNo: Joi.string(),
+        paymentDue: Joi.string()
+      })
+  })
+
+  it('POST malformed JSON in orderLinesData returns error', () => {
+    return frisby.post(API_URL, {
+      headers: authHeader,
+      body: {
+        orderLinesData: '{ "productId: 28'
+      }
+    })
+      .expect('status', 500)
   })
 })
