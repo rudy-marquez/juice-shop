@@ -224,4 +224,50 @@ describe('insecurity', () => {
       expect(security.hmac('')).to.equal('f052179ec5894a2e79befa8060cfcb517f1e14f7f6222af854377b6481ae953e')
     })
   })
+
+  describe('updateAuthenticatedUsers', () => {
+    it('sets token cookie with httpOnly flag to prevent JavaScript access', () => {
+      const middleware = security.updateAuthenticatedUsers()
+      const cookieOptions: Record<string, unknown> = {}
+      const req = { cookies: { token: security.authorize({ data: { id: 99, role: 'customer' } }) }, headers: {} }
+      const res = {
+        cookie: (name: string, value: string, options?: Record<string, unknown>) => {
+          if (name === 'token') {
+            Object.assign(cookieOptions, options)
+          }
+        }
+      }
+      const next = () => {}
+      middleware(req, res, next)
+      expect(cookieOptions).to.have.property('httpOnly', true)
+    })
+
+    it('sets token cookie with secure flag to prevent transmission over HTTP', () => {
+      const middleware = security.updateAuthenticatedUsers()
+      const cookieOptions: Record<string, unknown> = {}
+      const req = { cookies: { token: security.authorize({ data: { id: 98, role: 'customer' } }) }, headers: {} }
+      const res = {
+        cookie: (name: string, value: string, options?: Record<string, unknown>) => {
+          if (name === 'token') {
+            Object.assign(cookieOptions, options)
+          }
+        }
+      }
+      const next = () => {}
+      middleware(req, res, next)
+      expect(cookieOptions).to.have.property('secure', true)
+    })
+
+    it('calls next() regardless of whether the cookie is set', () => {
+      const middleware = security.updateAuthenticatedUsers()
+      let nextCalled = false
+      const req = { cookies: {}, headers: {} }
+      const res = {
+        cookie: () => {}
+      }
+      const next = () => { nextCalled = true }
+      middleware(req, res, next)
+      expect(nextCalled).to.equal(true)
+    })
+  })
 })
