@@ -149,7 +149,8 @@ describe('/rest/user/login', () => {
       })
   })
 
-  it('POST login with WHERE-clause disabling SQL injection attack', () => {
+  it('POST login with WHERE-clause disabling SQL injection attack is blocked', () => {
+    // SQL injection is now blocked: parameterized ORM query prevents bypass
     return frisby.post(REST_URL + '/user/login', {
       header: jsonHeader,
       body: {
@@ -157,14 +158,11 @@ describe('/rest/user/login', () => {
         password: undefined
       }
     })
-      .expect('status', 200)
-      .expect('header', 'content-type', /application\/json/)
-      .expect('jsonTypes', 'authentication', {
-        token: Joi.string()
-      })
+      .expect('status', 401)
   })
 
-  it('POST login with known email "admin@juice-sh.op" in SQL injection attack', () => {
+  it('POST login with known email "admin@juice-sh.op" in SQL injection attack is blocked', () => {
+    // SQL injection via comment-termination is now blocked
     return frisby.post(REST_URL + '/user/login', {
       header: jsonHeader,
       body: {
@@ -172,14 +170,11 @@ describe('/rest/user/login', () => {
         password: undefined
       }
     })
-      .expect('status', 200)
-      .expect('header', 'content-type', /application\/json/)
-      .expect('jsonTypes', 'authentication', {
-        token: Joi.string()
-      })
+      .expect('status', 401)
   })
 
-  it('POST login with known email "jim@juice-sh.op" in SQL injection attack', () => {
+  it('POST login with known email "jim@juice-sh.op" in SQL injection attack is blocked', () => {
+    // SQL injection via comment-termination is now blocked
     return frisby.post(REST_URL + '/user/login', {
       header: jsonHeader,
       body: {
@@ -187,14 +182,11 @@ describe('/rest/user/login', () => {
         password: undefined
       }
     })
-      .expect('status', 200)
-      .expect('header', 'content-type', /application\/json/)
-      .expect('jsonTypes', 'authentication', {
-        token: Joi.string()
-      })
+      .expect('status', 401)
   })
 
-  it('POST login with known email "bender@juice-sh.op" in SQL injection attack', () => {
+  it('POST login with known email "bender@juice-sh.op" in SQL injection attack is blocked', () => {
+    // SQL injection via comment-termination is now blocked
     return frisby.post(REST_URL + '/user/login', {
       header: jsonHeader,
       body: {
@@ -202,14 +194,11 @@ describe('/rest/user/login', () => {
         password: undefined
       }
     })
-      .expect('status', 200)
-      .expect('header', 'content-type', /application\/json/)
-      .expect('jsonTypes', 'authentication', {
-        token: Joi.string()
-      })
+      .expect('status', 401)
   })
 
-  it('POST login with non-existing email "acc0unt4nt@juice-sh.op" via UNION SELECT injection attack', () => {
+  it('POST login with UNION SELECT injection attack is blocked', () => {
+    // UNION-based SQL injection is now blocked by parameterized ORM query
     return frisby.post(REST_URL + '/user/login', {
       header: jsonHeader,
       body: {
@@ -217,14 +206,11 @@ describe('/rest/user/login', () => {
         password: undefined
       }
     })
-      .expect('status', 200)
-      .expect('header', 'content-type', /application\/json/)
-      .expect('jsonTypes', 'authentication', {
-        token: Joi.string()
-      })
+      .expect('status', 401)
   })
 
-  it('POST login with query-breaking SQL Injection attack', () => {
+  it('POST login with query-breaking SQL Injection attack is blocked', () => {
+    // Malformed SQL payload is safely rejected via parameterized query
     return frisby.post(REST_URL + '/user/login', {
       header: jsonHeader,
       body: {
