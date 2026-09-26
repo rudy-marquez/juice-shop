@@ -32,7 +32,8 @@ module.exports = function productReviews () {
                   const likedBy = review.likedBy
                   likedBy.push(user.data.email)
                   let count = 0
-                  for (let i = 0; i < likedBy.length; i++) {
+                  const MAX_LIKED_BY = 100
+                  for (let i = 0; i < Math.min(likedBy.length, MAX_LIKED_BY); i++) {
                     if (likedBy[i] === user.data.email) {
                       count++
                     }
