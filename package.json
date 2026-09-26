@@ -282,5 +282,8 @@
       "angular",
       "inject"
     ]
+  },
+  "overrides": {
+    "jsonwebtoken@0.1.0": "9.0.0"
   }
 }
