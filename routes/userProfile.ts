@@ -59,7 +59,14 @@ module.exports = function getUserProfile () {
             'Content-Security-Policy': CSP
           })
 
-          res.send(fn(user))
+          // HTML-encode user-controlled fields before passing them to the template
+          // to prevent Stored XSS via data read from the database (CWE-79).
+          const safeUser = {
+            username: entities.encode(user?.username ?? ''),
+            email: entities.encode(user?.email ?? ''),
+            profileImage: entities.encode(user?.profileImage ?? '')
+          }
+          res.send(fn(safeUser))
         }).catch((error: Error) => {
           next(error)
         })
