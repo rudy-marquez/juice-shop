@@ -35,7 +35,11 @@ module.exports = function getUserProfile () {
           username = '\\' + username
           const theme = themes[config.get<string>('application.theme')]
           if (username) {
-            template = template.replace(/_username_/g, username)
+            // HTML-encode the username before inserting into the Pug template to prevent
+            // Stored XSS (CWE-79). The _username_ placeholder is substituted as raw text
+            // inside the Pug source, so any HTML special characters in the username must be
+            // encoded here — analogous to how _title_ is encoded with entities.encode().
+            template = template.replace(/_username_/g, entities.encode(username))
           }
           template = template.replace(/_emailHash_/g, security.hash(user?.email))
           template = template.replace(/_title_/g, entities.encode(config.get('application.name')))
