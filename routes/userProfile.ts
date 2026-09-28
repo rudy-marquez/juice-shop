@@ -35,7 +35,11 @@ module.exports = function getUserProfile () {
           username = '\\' + username
           const theme = themes[config.get<string>('application.theme')]
           if (username) {
-            template = template.replace(/_username_/g, username)
+            // HTML-encode the username before inserting into the Pug template to prevent
+            // Stored XSS (CWE-79). The _username_ placeholder is substituted as raw text
+            // inside the Pug source, so any HTML special characters in the username must be
+            // encoded here — analogous to how _title_ is encoded with entities.encode().
+            template = template.replace(/_username_/g, entities.encode(username))
           }
           template = template.replace(/_emailHash_/g, security.hash(user?.email))
           template = template.replace(/_title_/g, entities.encode(config.get('application.name')))
@@ -45,7 +49,7 @@ module.exports = function getUserProfile () {
           template = template.replace(/_navColor_/g, theme.navColor)
           template = template.replace(/_primLight_/g, theme.primLight)
           template = template.replace(/_primDark_/g, theme.primDark)
-          template = template.replace(/_logo_/g, utils.extractFilename(config.get('application.logo')))
+          template = template.replace(/_logo_/g, entities.encode(utils.extractFilename(config.get('application.logo'))))
           const fn = pug.compile(template)
           const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval' https://code.getmdl.io http://ajax.googleapis.com`
           // @ts-expect-error FIXME type issue with string vs. undefined for username
@@ -55,7 +59,14 @@ module.exports = function getUserProfile () {
             'Content-Security-Policy': CSP
           })
 
-          res.send(fn(user))
+          // HTML-encode user-controlled fields before passing them to the template
+          // to prevent Stored XSS via data read from the database (CWE-79).
+          const safeUser = {
+            username: entities.encode(user?.username ?? ''),
+            email: entities.encode(user?.email ?? ''),
+            profileImage: entities.encode(user?.profileImage ?? '')
+          }
+          res.send(fn(safeUser))
         }).catch((error: Error) => {
           next(error)
         })
