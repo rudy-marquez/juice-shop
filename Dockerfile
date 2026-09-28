@@ -28,7 +28,7 @@ RUN rm -rf node_modules/libxmljs2/build && \
   cd node_modules/libxmljs2 && \
   npm run build
 
-FROM gcr.io/distroless/nodejs18-debian11
+FROM gcr.io/distroless/nodejs18-debian11:nonroot
 ARG BUILD_DATE
 ARG VCS_REF
 LABEL maintainer="Bjoern Kimminich <bjoern.kimminich@owasp.org>" \
