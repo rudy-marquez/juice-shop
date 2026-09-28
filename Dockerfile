@@ -1,7 +1,7 @@
 FROM node:18-buster as installer
 COPY . /juice-shop
 WORKDIR /juice-shop
-RUN npm i -g typescript ts-node
+RUN npm i -g typescript@5.3.3 ts-node@10.9.2
 RUN npm install --omit=dev --unsafe-perm
 RUN npm dedupe
 RUN rm -rf frontend/node_modules
