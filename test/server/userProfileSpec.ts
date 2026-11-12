@@ -9,10 +9,10 @@ const sinonChai = require('sinon-chai')
 const expect = chai.expect
 chai.use(sinonChai)
 
-// Minimal pug template that mirrors the relevant part of views/userProfile.pug.
-// Using a plain string replacement placeholder so pug.compile does not fail
+// Minimal pug template that mirrors the relevant part of views/userProfile.pug
+// (escaped interpolation of the username) so pug.compile does not fail
 // in a unit-test environment that has no real theme/config data.
-const MINIMAL_PUG_TEMPLATE = 'p _username_'
+const MINIMAL_PUG_TEMPLATE = 'p #{username}'
 
 describe('userProfile', () => {
   // Route factory
@@ -158,6 +158,50 @@ describe('userProfile', () => {
     setImmediate(() => {
       // Flag must remain falsy (undefined) for an innocent username
       expect(req.app.locals.abused_ssti_bug).to.not.equal(true)
+      done()
+    })
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Stored XSS (CWE-79) prevention
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('should HTML-encode a script tag stored in the username', (done) => {
+    findByPkStub.resolves(mockUser('<script>alert(`xss`)</script>'))
+
+    getUserProfile()(req, res, next)
+
+    setImmediate(() => {
+      expect(res.send).to.have.been.calledOnce
+      const renderedHtml: string = res.send.firstCall.args[0]
+      expect(renderedHtml).to.not.include('<script>')
+      expect(renderedHtml).to.include('&lt;script&gt;')
+      done()
+    })
+  })
+
+  it('should HTML-encode an event-handler payload stored in the username', (done) => {
+    findByPkStub.resolves(mockUser('<img src=x onerror=alert(1)>'))
+
+    getUserProfile()(req, res, next)
+
+    setImmediate(() => {
+      const renderedHtml: string = res.send.firstCall.args[0]
+      expect(renderedHtml).to.not.include('<img')
+      expect(renderedHtml).to.include('&lt;img')
+      done()
+    })
+  })
+
+  it('should not inject extra Pug markup via a multi-line username', (done) => {
+    findByPkStub.resolves(mockUser('x\np\n  script alert(1)'))
+
+    getUserProfile()(req, res, next)
+
+    setImmediate(() => {
+      expect(res.send).to.have.been.calledOnce
+      const renderedHtml: string = res.send.firstCall.args[0]
+      expect(renderedHtml).to.not.include('<script')
       done()
     })
   })
