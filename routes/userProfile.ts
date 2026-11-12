@@ -25,18 +25,16 @@ module.exports = function getUserProfile () {
       if (loggedInUser) {
         UserModel.findByPk(loggedInUser.data.id).then((user: UserModel | null) => {
           let template = buf.toString()
-          let username = user?.username
+          const username = user?.username
           if (username?.match(/#{(.*)}/) !== null && !utils.disableOnContainerEnv()) {
             // Mark that a stored SSTI attempt was detected, but do NOT execute the payload.
             // Evaluating user-controlled code (eval) enables stored code injection (CWE-94).
             req.app.locals.abused_ssti_bug = true
           }
-          // Always escape the username as a literal string to prevent Pug template injection.
-          username = '\\' + username
+          // The username is NOT spliced into the template source. The view renders it via Pug's
+          // escaped interpolation (#{username}), which HTML-encodes it and prevents both stored
+          // XSS and Pug template injection.
           const theme = themes[config.get<string>('application.theme')]
-          if (username) {
-            template = template.replace(/_username_/g, username)
-          }
           template = template.replace(/_emailHash_/g, security.hash(user?.email))
           template = template.replace(/_title_/g, entities.encode(config.get('application.name')))
           template = template.replace(/_favicon_/g, favicon())
