@@ -163,6 +163,61 @@ describe('userProfile', () => {
   })
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Stored XSS (CWE-79) prevention for the configured logo
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe('configured logo', () => {
+    const LOGO_TEMPLATE = "img(src='assets/public/images/_logo_', alt='logo')"
+
+    function stubLogo (logo: string) {
+      const config = require('config')
+      const originalGet = config.get.bind(config)
+      sinon.stub(config, 'get').callsFake((key: string) => {
+        return key === 'application.logo' ? logo : originalGet(key)
+      })
+    }
+
+    it('should HTML-encode a malicious logo value before it reaches the template', (done) => {
+      const fs = require('fs')
+      fs.readFile.callsFake((_path: string, cb: Function) => {
+        cb(null, Buffer.from(LOGO_TEMPLATE))
+      })
+      stubLogo('x.png\'+(global.__logo_marker=true)+\'"><script>alert(1)</script>')
+      ;(global as any).__logo_marker = false
+      findByPkStub.resolves(mockUser('JaneDoe'))
+
+      getUserProfile()(req, res, next)
+
+      setImmediate(() => {
+        // Neither template injection nor raw markup may survive
+        expect((global as any).__logo_marker).to.equal(false)
+        expect(res.send).to.have.been.calledOnce
+        const renderedHtml: string = res.send.firstCall.args[0]
+        expect(renderedHtml).to.not.include('<script>')
+        delete (global as any).__logo_marker
+        done()
+      })
+    })
+
+    it('should still render a regular logo filename unchanged', (done) => {
+      const fs = require('fs')
+      fs.readFile.callsFake((_path: string, cb: Function) => {
+        cb(null, Buffer.from(LOGO_TEMPLATE))
+      })
+      stubLogo('JuiceShop_Logo.png')
+      findByPkStub.resolves(mockUser('JaneDoe'))
+
+      getUserProfile()(req, res, next)
+
+      setImmediate(() => {
+        expect(res.send).to.have.been.calledOnce
+        expect(res.send.firstCall.args[0]).to.include('assets/public/images/JuiceShop_Logo.png')
+        done()
+      })
+    })
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
   // Normal profile rendering
   // ──────────────────────────────────────────────────────────────────────────
 
